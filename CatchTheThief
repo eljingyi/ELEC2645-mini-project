@@ -1,0 +1,839 @@
+#include "mbed.h"
+#include "stm32f413h_discovery_ts.h"
+#include "stm32f413h_discovery_lcd.h"
+#include "stdlib.h"
+#include <vector>
+
+#define RIGHT 1
+#define LEFT 2
+
+#define YES 3
+#define NO 4
+
+#define RESTART 8
+#define END 9
+
+// button A object
+InterruptIn buttonA(p29);
+volatile int g_buttonA_flag = 0;
+
+// initialise button A 
+void buttonA_init();
+// button A event-triggered interrupt
+void buttonA_isr();
+
+void buttonA_init() {
+	// buttonA is a pull down resistor (look for the rising edge to fire the interrupt)
+	buttonA.rise(&buttonA_isr);
+	// Disable the internal pull down of button A due to the internal pull-down resistor due to InterruptIn 
+	buttonA.mode(PullNone);
+}
+
+
+void buttonA_isr() {
+	g_buttonA_flag = 1; // set ISR flag to 1
+}
+
+TS_StateTypeDef TS_State = { 0 };
+
+//////////////////////////////////
+//siren//
+class Siren {
+    public: 
+        void update_siren(int direction);
+        //void update_ball();
+        void draw_background(); 
+        void draw_start_page();
+        void draw_siren();
+        void draw_look_left();
+        void draw_look_centre();
+        void draw_look_right();
+        void draw_thief_caught();
+        //void draw_tennisball();
+        void set_position(int x,int y);
+        int get_x_position();
+        int get_y_position(); 
+        
+    private:
+        int _x_position; 
+        int _y_position;
+};
+
+void Siren::update_siren(int direction) {
+    if (direction == RIGHT) {
+        // move by a factor of 10 in the right direction 
+        _x_position = _x_position + 10;
+    } else if (direction == LEFT) {
+        // move by a factor of 10 in the left direction 
+        _x_position = _x_position - 10; 
+    } else {
+        // if there is no change in the position, nothing is done to the _x_positon 
+    } 
+}
+
+void Siren::draw_background() {
+    BSP_LCD_Clear(LCD_COLOR_BLACK);
+    //sky
+    BSP_LCD_SetTextColor(LCD_COLOR_DARKBLUE);
+    BSP_LCD_FillRect(0,33,240,2);
+    BSP_LCD_FillRect(0,40,240,2);
+    BSP_LCD_FillRect(0,45,240,2);
+    BSP_LCD_FillRect(0,50,240,3);
+    BSP_LCD_FillRect(0,56,240,5);
+    //stars
+    BSP_LCD_SetTextColor(LCD_COLOR_YELLOW);
+    BSP_LCD_FillCircle(0,10,2); 
+    BSP_LCD_FillCircle(24,15,2); 
+    BSP_LCD_FillCircle(44,55,2); 
+    BSP_LCD_FillCircle(87,15,2); 
+    BSP_LCD_FillCircle(110,10,2); 
+    BSP_LCD_FillCircle(153,3,2); 
+    BSP_LCD_FillCircle(190,21,2); 
+    BSP_LCD_FillCircle(220,30,2);
+    //shadows of the buildings behind
+    BSP_LCD_SetTextColor(LCD_COLOR_DARKGRAY);
+    BSP_LCD_FillRect(0,50,10,170); 
+    BSP_LCD_FillRect(10,100,60,120); 
+    BSP_LCD_FillRect(70,20,80,200);
+    BSP_LCD_FillRect(150,60,60,160); 
+    BSP_LCD_FillRect(210,40,30,180); 
+    
+    BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
+    //second building - wall facing light
+    BSP_LCD_FillRect(80,40,40,190);
+    //second building - top of the building
+    BSP_LCD_FillRect(88,35,40,5);
+    //third building - shelter (shadows)
+    BSP_LCD_FillRect(210,160,18,13);
+    
+    BSP_LCD_SetTextColor(LCD_COLOR_DARKRED);
+    //second building - wall against light
+    BSP_LCD_FillRect(120,40,15,190);
+    
+    BSP_LCD_SetTextColor(LCD_COLOR_LIGHTGRAY);
+    //first building - wall facing light
+    BSP_LCD_FillRect(0,70,70,150); 
+    //second building - lcd display
+    BSP_LCD_FillRect(85,45,30,20);
+    //shop - banner
+    BSP_LCD_FillRect(140,142,80,14);
+    //shop - shelter (shadow) 
+    BSP_LCD_FillRect(230,160,18,13);
+    
+    BSP_LCD_SetTextColor(LCD_COLOR_GRAY);
+    //first building - wall against light
+    BSP_LCD_FillRect(70,70,30,150);
+    
+    BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+    //first building - windows against light
+    BSP_LCD_FillRect(73,80,10,100);
+    BSP_LCD_FillRect(87,80,10,100);
+    
+    BSP_LCD_SetTextColor(LCD_COLOR_DARKGRAY);
+    //first building - windows facing light
+    BSP_LCD_FillRect(5,80,25,100);
+    BSP_LCD_FillRect(40,80,25,100);
+    
+    BSP_LCD_SetTextColor(LCD_COLOR_GRAY);
+    //first building - details for the windows facing light
+    BSP_LCD_FillRect(0,80,70,5);
+    BSP_LCD_FillRect(0,100,70,5);
+    BSP_LCD_FillRect(0,120,70,5);
+    BSP_LCD_FillRect(0,140,70,5);
+    BSP_LCD_FillRect(0,160,70,5);
+    BSP_LCD_FillRect(0,180,70,5);
+    //third building - wall against light
+    BSP_LCD_FillRect(210,176,30,44);
+    
+    BSP_LCD_SetTextColor(LCD_COLOR_RED);
+    //third building - shelter 
+    BSP_LCD_FillRect(130,160,18,13);
+    BSP_LCD_FillRect(170,160,18,13);
+    
+    BSP_LCD_SetTextColor(LCD_COLOR_DARKCYAN);
+    //third building - wall facing light
+    BSP_LCD_FillRect(130,176,5,44);
+    BSP_LCD_FillRect(203,176,5,44);
+    BSP_LCD_FillRect(132,196,70,5);
+    BSP_LCD_FillRect(137,205,64,15);
+    
+    BSP_LCD_SetTextColor(LCD_COLOR_DARKGRAY);
+    //first building - details for windows against light
+    BSP_LCD_FillRect(70,80,30,5);
+    BSP_LCD_FillRect(70,100,30,5);
+    BSP_LCD_FillRect(70,120,30,5);
+    BSP_LCD_FillRect(70,140,30,5);
+    BSP_LCD_FillRect(70,160,30,5);
+    BSP_LCD_FillRect(70,180,30,5);
+    //first building - door 
+    BSP_LCD_FillRect(25,190,20,30);
+    //third building - outline of counter
+    BSP_LCD_DrawRect(132,196,69,5);
+     
+    BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+    //road
+    BSP_LCD_FillRect(0,220,240,20); 
+    
+    BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+    //white lane on road
+    BSP_LCD_FillRect(10,230,50,2); 
+    BSP_LCD_FillRect(70,230,50,2); 
+    BSP_LCD_FillRect(130,230,50,2); 
+    BSP_LCD_FillRect(190,230,50,2);
+    //first building-top of the building 
+    BSP_LCD_FillRect(15,65,70,5);
+    //third building - shelter
+    BSP_LCD_FillRect(150,160,18,13);
+    BSP_LCD_FillRect(190,160,18,13);
+}
+
+void Siren::draw_start_page() {
+    BSP_LCD_SetTextColor(LCD_COLOR_ORANGE);
+    BSP_LCD_FillRect(38,60,175,130);
+    BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+    BSP_LCD_DrawRect(38,60,175,130);
+    BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+    BSP_LCD_FillRect(48,70,155,110);
+    BSP_LCD_SetTextColor(LCD_COLOR_ORANGE);
+    BSP_LCD_SetFont(&Font20);
+    BSP_LCD_SetBackColor(LCD_COLOR_WHITE);
+    BSP_LCD_DisplayStringAt(10, 100, (uint8_t *)"TOUCH THE", CENTER_MODE);
+    BSP_LCD_DisplayStringAt(10, 120, (uint8_t *)"SCREEN TO", CENTER_MODE);
+    BSP_LCD_DisplayStringAt(10, 140, (uint8_t *)"START!", CENTER_MODE);
+}
+
+void Siren::draw_siren() {
+    // draw white circle  
+    BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+    BSP_LCD_FillCircle(_x_position,_y_position,30); 
+    // draw siren
+    BSP_LCD_SetTextColor(LCD_COLOR_RED);
+    BSP_LCD_FillRect(_x_position-10,_y_position-15,20,20); 
+    BSP_LCD_SetTextColor(LCD_COLOR_GRAY);
+    BSP_LCD_FillRect(_x_position-15,_y_position+5,30,5); 
+    BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+    BSP_LCD_FillRect(_x_position-20,_y_position+10,40,10);
+}
+
+void Siren::draw_look_left() {
+    //hat 
+    BSP_LCD_SetTextColor(LCD_COLOR_BLUE);
+    BSP_LCD_FillRect(_x_position-10,_y_position-25,20,7);
+    BSP_LCD_SetTextColor(LCD_COLOR_LIGHTBLUE);
+    BSP_LCD_FillRect(_x_position-15,_y_position-18,25,3);
+    BSP_LCD_SetTextColor(LCD_COLOR_LIGHTYELLOW);
+    BSP_LCD_FillRect(_x_position-5,_y_position-23,5,3);
+    //eyes
+    BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+    BSP_LCD_FillRect(_x_position-8,_y_position-10,14,8); 
+    BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+    BSP_LCD_FillCircle(_x_position-5,_y_position-4,2); 
+    BSP_LCD_FillCircle(_x_position+1,_y_position-4,2); 
+}
+
+void Siren::draw_look_centre() {
+    //hat 
+    BSP_LCD_SetTextColor(LCD_COLOR_BLUE);
+    BSP_LCD_FillRect(_x_position-10,_y_position-25,20,7);
+    BSP_LCD_SetTextColor(LCD_COLOR_LIGHTBLUE);
+    BSP_LCD_FillRect(_x_position-10,_y_position-18,20,3);
+    BSP_LCD_SetTextColor(LCD_COLOR_LIGHTYELLOW);
+    BSP_LCD_FillRect(_x_position-5,_y_position-23,5,3);
+    //eyes
+    BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+    BSP_LCD_FillRect(_x_position-8,_y_position-10,16,8); 
+    BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+    BSP_LCD_FillCircle(_x_position-5,_y_position-4,2); 
+    BSP_LCD_FillCircle(_x_position+4,_y_position-4,2);  
+}
+
+void Siren::draw_look_right() {
+    //hat 
+    BSP_LCD_SetTextColor(LCD_COLOR_BLUE);
+    BSP_LCD_FillRect(_x_position-10,_y_position-25,20,7);
+    BSP_LCD_SetTextColor(LCD_COLOR_LIGHTBLUE);
+    BSP_LCD_FillRect(_x_position-10,_y_position-18,25,3);
+    BSP_LCD_SetTextColor(LCD_COLOR_LIGHTYELLOW);
+    BSP_LCD_FillRect(_x_position,_y_position-23,5,3);
+    //eyes
+    BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+    BSP_LCD_FillRect(_x_position-6,_y_position-10,14,8); 
+    BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+    BSP_LCD_FillCircle(_x_position-2,_y_position-4,2); 
+    BSP_LCD_FillCircle(_x_position+4,_y_position-4,2); 
+}
+
+void Siren::set_position(int x,int y) {
+    _x_position = x;
+    _y_position = y;
+}
+
+int Siren::get_x_position() {
+    return _x_position; 
+}
+
+int Siren::get_y_position() {
+    return _y_position; 
+}
+//siren end//
+////////////////////////////////////////////////
+//thief//
+class Thief {
+    public: 
+        void draw_thief();
+        void draw_left();
+        void draw_right();
+        void draw_thief_caught();
+        void update_start_point();
+        void update_movement();
+        void set_position(int x, int y);
+        int get_posx(); 
+        int get_posy(); 
+        
+    private:
+        int _posx; 
+        int _posy; 
+        // Direction that the thief is running from (from the left side or the right side)
+        int _movement;
+        
+};
+
+void Thief::draw_thief() {
+    
+    // Head
+    BSP_LCD_SetTextColor(LCD_COLOR_ORANGE);
+    BSP_LCD_FillRect(_posx-10,_posy-10,20,20); 
+    Point left_ear[3]= {{_posx-10, _posy-10}, {_posx-7,_posy-20}, {_posx-3, _posy-10}};
+    BSP_LCD_FillPolygon(left_ear, 3); 
+    Point right_ear[3]= {{_posx+9, _posy-10}, {_posx+6,_posy-20}, {_posx+2, _posy-10}};
+    BSP_LCD_FillPolygon(right_ear, 3); 
+    // arms
+    BSP_LCD_FillRect(_posx-20,_posy+10,40,5); 
+    // tail
+    BSP_LCD_FillRect(_posx-27,_posy+15,5,5);
+    BSP_LCD_FillRect(_posx-22,_posy+17.5,5,5);
+    BSP_LCD_FillRect(_posx-20,_posy+20,5,5);
+    BSP_LCD_FillRect(_posx-15,_posy+22,5,5);
+    // Eyes
+    BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+    BSP_LCD_FillRect(_posx-10,_posy-3,20,6); 
+    BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+    BSP_LCD_FillCircle(_posx-5 ,_posy,2); 
+    BSP_LCD_FillCircle(_posx+5 ,_posy,2);
+    // body
+    BSP_LCD_SetTextColor(LCD_COLOR_DARKBLUE);
+    BSP_LCD_FillRect(_posx-15,_posy+10,30,5); 
+    BSP_LCD_FillRect(_posx-10,_posy+15,20,15); 
+    // legs
+    BSP_LCD_SetTextColor(LCD_COLOR_ORANGE);
+    BSP_LCD_FillRect(_posx-8,_posy+30,5,8);  
+    BSP_LCD_FillRect(_posx+4,_posy+30,5,8);
+    
+}
+
+
+void Thief::draw_thief_caught() {
+    BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+    BSP_LCD_FillRect(_posx,_posy-15,15,5);
+    BSP_LCD_FillRect(_posx+5,_posy-20,5,15); 
+    BSP_LCD_FillRect(_posx+25,_posy-23,5,20); 
+}
+
+void Thief::update_start_point() {
+    if(_posx == 0) {
+        _movement = LEFT;
+    } else if (_posx == 240) {
+        _movement = RIGHT;
+    }
+}
+
+void Thief::update_movement() {
+    if(_movement == LEFT) {
+        // thief is running from the left to the right 
+        _posx = _posx + 15;
+    } else if (_movement == RIGHT) {
+        // thief is running from the right to the left 
+        _posx = _posx - 15;
+    } else {
+        printf("Thief is not running from the left or right, somethings wrong!\n");
+    }
+}
+
+void Thief::set_position(int x, int y) {
+    _posx = x; 
+    _posy = y; 
+}
+
+
+int Thief::get_posx() { 
+    return _posx;
+}
+
+int Thief::get_posy() { 
+    return _posy;
+}
+
+//end thief//
+///////////////////////////////////////////
+//ball//
+class Ball {
+    public: 
+        // draw the tennis ball onto the screen 
+        void draw();
+        // update the movement of the ball 
+        void update();
+        // ball drops from the siren therefore the initial position is the position of the siren 
+        void set_position(int x,int y); 
+        // get the current x coordinate of the ball
+        int get_x_position();
+        // get the current y coordinate of the ball
+        int get_y_position();
+    private:
+        int _x_position; 
+        int _y_position;
+};
+
+void Ball::draw() {
+    BSP_LCD_SetTextColor(LCD_COLOR_GREEN);
+    BSP_LCD_FillCircle(_x_position,_y_position+25,7);
+    BSP_LCD_SetTextColor(LCD_COLOR_YELLOW);
+    BSP_LCD_DrawCircle(_x_position,_y_position+25,7); 
+    BSP_LCD_FillRect(_x_position-5,_y_position+20,2,2);
+    BSP_LCD_FillRect(_x_position-3,_y_position+22,2,5);
+    BSP_LCD_FillRect(_x_position-5,_y_position+27,2,2);
+    BSP_LCD_FillRect(_x_position+4,_y_position+20,2,2);
+    BSP_LCD_FillRect(_x_position+2,_y_position+22,2,5);
+    BSP_LCD_FillRect(_x_position+4,_y_position+27,2,2);
+}
+
+void Ball::update() {
+    // let the ball drop faster than the movement of the siren
+    _y_position = _y_position + 30; 
+}
+
+void Ball::set_position(int x,int y) {
+    _x_position = x;
+    _y_position = y;
+}
+
+int Ball::get_x_position() {
+    return _x_position;
+}
+
+int Ball::get_y_position() {
+    return _y_position;
+}
+
+//ball end//
+////////////////////////////////////////////////
+class User {
+    public: 
+        // void set_siren_position(int x, int y );
+        int get_direction_update(int siren_x, int siren_y ); 
+        int get_touch_update();
+        
+    private: 
+        int _direction;
+        // check if the touch is detected
+        int _touch_detected;   
+};
+
+int User::get_direction_update(int siren_x, int siren_y ) {
+    //printf("Success: User Input ready!\n");
+    BSP_TS_GetState(&TS_State);
+    if(TS_State.touchDetected) {
+        // The game starts when the first touch is detected.
+        _touch_detected = YES;
+        // Get the x coordinate of the position that the user have indicated by touch 
+        uint16_t x1 = TS_State.touchX[0];
+        //uint16_t y1 = TS_State.touchY[0];
+
+        // Get the difference between the current siren position and the user input position
+        int diff_x = x1 - siren_x ; 
+
+        if (diff_x > 0) {
+            _direction = RIGHT;
+        } else if (diff_x < 0) {
+            _direction = LEFT;
+        } 
+    } else {
+        // Let the siren stay in its current position if touch is not detected 
+        _direction = 0;
+    }
+    return _direction;
+}
+
+int User::get_touch_update() {
+    return _touch_detected;
+}
+
+////////////////////////////////////////////
+//catch thief engine//
+class Catch_thief_engine {
+    public: 
+        void init(int siren_x, int siren_y, int thief_x, int thief_y);
+        void update();
+        void draw();
+        void update_ball();
+        void check_wall_collision();
+        void update_thief();
+        void reset_thief_direction();
+        void update_catch_count();
+        void set_hit_thief();
+        int get_catch_count();
+        int get_thief_escape_count();
+
+        
+    private: 
+        Siren _siren; 
+        Thief _thief;
+        User _user;
+        Ball _ball;
+        // Counts the number of thief caught
+        int _thief_caught; 
+        //flag to check if there is an increase in the number of thieves caught 
+        int _thief_caught_increased;
+        // Counts the number of thieves that escaped
+        int _thief_escape_count;
+        // Flag to check whether the siren is looking towards the left or right and updates the display
+        int _draw_eyes;
+        // Flag to check if the direction the eyes of the siren is looking at needs to be updated
+        int _update_eyes;
+        // Flag to check if the user is shooting the tennis ball
+        int _shoot_ball;
+        // Flag to check if tennis ball is drawn
+        int _is_ball_drawn;
+        // Flag to check if the thief was hit
+        int _hit;
+        // Flag to check if the direction for the thief has been reset 
+        int _thief_reset;
+        
+
+        
+};
+void Catch_thief_engine::init(int siren_x, int siren_y, int thief_x, int thief_y) {
+    printf("Initialising engine...\n");
+    // initialise the siren sprite
+    _siren.set_position(siren_x, siren_y);
+    // initialise the thief sprite
+    _thief.set_position(thief_x, thief_y);
+    // initialise the ball 
+    _ball.set_position(_siren.get_x_position(), _siren.get_y_position());
+    // initialise button A
+    buttonA_init();
+    // initialise number of thieves caught
+    _thief_caught = 0;
+    // initialise thief reset flag
+    _thief_reset = NO;
+    // initialise the increase in the number of theives caught 
+    _thief_caught_increased = 0;
+    printf("Success: Catch the thief game is initialised!\n");
+}
+
+void Catch_thief_engine::update() {
+    // update the previous number of thieves caught
+    update_catch_count();
+
+    // update user input for the siren 
+    int direction = _user.get_direction_update(_siren.get_x_position(), _siren.get_x_position());
+    _siren.update_siren(direction); 
+    if(direction == RIGHT) {
+        // whether to update the direction the eyes of the siren is looking at 
+        _update_eyes = YES;
+        _draw_eyes = RIGHT;
+    } else if (direction == LEFT) {
+        // whether to update the direction the eyes of the siren is looking at 
+        _update_eyes = YES;
+        _draw_eyes = LEFT;
+    } else {
+        _update_eyes = NO;
+    }
+
+    // check wall collision 
+    check_wall_collision();
+
+    // update thief 
+    if (_thief_reset == NO) {
+    reset_thief_direction();
+    } else {
+        _thief.update_movement();
+    }
+
+
+    // When the user press the button, the tennis ball is released 
+    if (g_buttonA_flag) {
+        printf("Ball releasing!\n");
+        // reset the flag
+        g_buttonA_flag = 0;
+        // shoot the ball
+        _shoot_ball = YES;
+        _ball.set_position(_siren.get_x_position(), _siren.get_y_position());
+    } else {
+        _shoot_ball = NO;
+    }
+     // update ball position
+    _ball.update();
+    
+}
+
+
+void Catch_thief_engine::draw() {
+    _siren.draw_background();
+    _siren.draw_siren();
+    _thief.draw_thief();
+    
+    // drawing of the siren's eyes
+    if (_update_eyes == YES) {
+        if (_draw_eyes == RIGHT) {
+        _siren.draw_look_right();
+        } else if(_draw_eyes == LEFT) {
+            _siren.draw_look_left();
+        }
+    } else {
+        _siren.draw_look_centre();
+    }
+    
+    // if ball was already drawn previously, continue drawing until it touches the ground
+    // if not:
+    // 1. Was the ball shot?
+    // Yes - Draw ball onto the screen now
+    // No - not activated, dont need to draw 
+    if(_is_ball_drawn == YES) {
+        if(_ball.get_y_position() < 220) {
+            _ball.draw();
+        } else {
+            _is_ball_drawn = NO;
+        }
+    } else if (_shoot_ball == YES) {
+        _ball.draw();
+        _is_ball_drawn = YES;
+    }
+
+    
+    //draw a +1 to indicate a thief is caught 
+    if (_thief_caught > _thief_caught_increased) {
+        _thief_caught_increased = _thief_caught;
+        _thief.draw_thief_caught();
+    }
+    
+}
+
+void Catch_thief_engine::check_wall_collision() {
+    // When the white circle touches the wall, it cannot move into the wall
+    if (_siren.get_x_position() - 30 <= 0 ) {
+        _siren.set_position(30, _siren.get_y_position()); 
+    } else if ( _siren.get_x_position() + 30 >= 240) {
+        _siren.set_position(210, _siren.get_y_position()); 
+    }
+
+    // When the thief collide with the wall, it escapes sucessfully 
+    if (_thief.get_posx() > 240 || _thief.get_posx() < 0) {
+        // if it managed to escape sucessfully, thief escape count will increase by 1
+        _thief_escape_count = _thief_escape_count +1;
+        // reset the position of the thief
+        reset_thief_direction();
+    }
+
+}
+
+
+void Catch_thief_engine::reset_thief_direction() {
+    // Updates the movement of the thief 
+    // Initialise random seed 
+    srand(time(NULL));
+
+    int random_number = rand() % 2;
+    if(random_number == 1) {
+            // Random number is an odd number 
+            // Thief is going to run from the left to the right 
+            // Set initial x position of the thief to be at the left end of the screen (x position = 0)
+            _thief.set_position(0,_thief.get_posy());
+            // check if else works also
+    } else if (random_number == 0) {
+        // Random number is an even number 
+        // Thief is going to run from the right to the left 
+        // Set initial x position of the thief to be at the right end of the screen (x position = 240)
+        _thief.set_position(240,_thief.get_posy());
+    
+    } else {
+        printf("I am a random number that is neither even nor odd, something's wrong\n");
+    }
+    _thief.update_start_point();
+    // Flag to indicate that the first position have been set 
+    _thief_reset = YES;
+}
+
+void Catch_thief_engine::update_catch_count() {
+    // hit the head to catch the thief 
+    // ball must be within the head coordinates (add in the radius)
+    if (_is_ball_drawn == YES) {
+        // ball hit the thief = catch the thief
+        if((_ball.get_x_position() - 10 >= _thief.get_posx() - 25) && (_ball.get_x_position() - 10 <= _thief.get_posx() + 25) ) {
+            if (_ball.get_y_position() + 10>= _thief.get_posy() - 15) {
+                _thief_caught = _thief_caught +1;
+            } 
+        } 
+    }
+    
+}
+
+void Catch_thief_engine::set_hit_thief() {
+    if(_thief_caught >= 1) {
+        _hit = YES;
+    } else {
+        _hit = NO;
+    }
+}
+
+int Catch_thief_engine::get_catch_count() {
+    return _thief_caught;
+}
+
+int Catch_thief_engine::get_thief_escape_count() {
+    return _thief_escape_count;
+}
+
+//catch thief engine end//
+/////////////////////////////////////////////////
+//player//
+
+class Player {
+    public:
+        void touch_start_page();
+        void draw_start();
+        int draw_scores(int scores);
+        void draw_game_over();
+    private:
+        int status;
+};
+
+void Player::touch_start_page() {
+    // Wont start until its activated
+    int i = 1;
+    while(i != 0){
+        BSP_TS_GetState(&TS_State);
+        if(TS_State.touchDetected) {
+            i = 0;
+        } else {
+            draw_start();
+        }
+        wait_ms(100);
+    }
+}
+
+void Player::draw_start() {
+    BSP_LCD_SetTextColor(LCD_COLOR_ORANGE);
+    BSP_LCD_FillRect(38,60,175,130);
+    BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+    BSP_LCD_DrawRect(38,60,175,130);
+    BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+    BSP_LCD_FillRect(48,70,155,110);
+    BSP_LCD_SetTextColor(LCD_COLOR_ORANGE);
+    BSP_LCD_SetFont(&Font16);
+    BSP_LCD_SetBackColor(LCD_COLOR_WHITE);
+    BSP_LCD_DisplayStringAt(10, 100, (uint8_t *)"TOUCH THE", CENTER_MODE);
+    BSP_LCD_DisplayStringAt(10, 120, (uint8_t *)"SCREEN TO", CENTER_MODE);
+    BSP_LCD_DisplayStringAt(10, 140, (uint8_t *)"START!", CENTER_MODE);
+}
+
+
+int Player::draw_scores(int scores) {
+    BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+    char buffer[20];
+    //BSP_LCD_SetFont(&Font16);
+    sprintf(buffer,"Scores: %d thieves caught!",scores);
+    // drawing the rect to see how much I should limit the touch detection
+    //BSP_LCD_DrawRect(45,130,80,30);
+    //BSP_LCD_DrawRect(150,130,50,30);
+    BSP_LCD_DisplayStringAt(10, 100, (uint8_t *)buffer, CENTER_MODE);
+    BSP_LCD_DisplayStringAt(50, 140, (uint8_t *)"Play again", LEFT_MODE);
+    BSP_LCD_DisplayStringAt(50, 140, (uint8_t *)"End", RIGHT_MODE);
+    int choice = 0;
+    
+    while(choice != 0){
+    
+        BSP_TS_GetState(&TS_State);
+        if(TS_State.touchDetected) {
+            uint16_t x1 = TS_State.touchX[0];
+            uint16_t y1 = TS_State.touchY[0];
+            // they are located at the same y coordinates
+            if(y1 >= 130 && y1 <= 160) {
+                if(x1 >= 45 && x1 <= 125) {
+                    choice = RESTART;
+                    return choice;
+                } else if (x1 >= 150 && x1 <= 200) {
+                    choice = END;
+                    return choice;
+                } 
+            }
+        }
+       wait_ms(100);
+    }
+    
+}
+
+void Player::draw_game_over() {
+    printf("You are exiting this game!\n");
+    
+    // simulating shutting down of device
+    wait_ms(1000);
+    BSP_LCD_Clear(LCD_COLOR_WHITE);
+    BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+    BSP_LCD_SetBackColor(LCD_COLOR_WHITE);
+    BSP_LCD_SetFont(&Font12);
+    BSP_LCD_DisplayStringAt(0, 120, (uint8_t *)"Exiting down....", CENTER_MODE);
+    wait_ms(1000);
+    BSP_LCD_Clear(LCD_COLOR_BLACK);
+    BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+    BSP_LCD_SetBackColor(LCD_COLOR_BLACK);
+    BSP_LCD_SetFont(&Font12);
+    BSP_LCD_DisplayStringAt(0, 120, (uint8_t *)"Hope to see you again soon ~^3^~!", CENTER_MODE);
+    wait_ms(1000);
+    BSP_LCD_Clear(LCD_COLOR_BLACK);
+}
+
+int main() {
+
+    BSP_LCD_Init();
+
+    /* Touchscreen initialization */
+    if (BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize()) == TS_ERROR) {
+        printf("BSP_TS_Init error\n");
+    }
+
+    /* Clear the LCD */
+    BSP_LCD_Clear(LCD_COLOR_WHITE);
+    
+    Catch_thief_engine catch_engine;
+    Player player;
+    
+    catch_engine.init(120, 30, 120, 190);
+    catch_engine.draw();
+    
+    player.touch_start_page();
+    // 30s timer
+    int timer = 300;
+    int game_over = NO;
+    while(game_over == NO) {
+        if(timer > 0) {
+            catch_engine.update();
+            catch_engine.draw();
+            // update timer
+            timer = timer - 10;
+            printf("Timer = %d\n",timer/10);
+        } else {
+            int game_state = player.draw_scores(catch_engine.get_catch_count());
+            if (game_state == RESTART) {
+                catch_engine.init(120, 30, 120, 190);
+                catch_engine.draw();
+                timer = 300;
+            } else {
+                game_over = YES;
+            }
+        }
+        wait_ms(100);
+    }
+
+    player.draw_game_over();
+        
+}
